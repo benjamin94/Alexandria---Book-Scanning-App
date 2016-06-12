@@ -1,13 +1,13 @@
 package it.jaschke.alexandria;
 
 import android.app.Activity;
+import android.app.Fragment;
+import android.app.LoaderManager;
 import android.content.Context;
+import android.content.CursorLoader;
 import android.content.Intent;
 import android.database.Cursor;
 import android.os.Bundle;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.content.CursorLoader;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Patterns;
@@ -19,11 +19,11 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-
+import it.jaschke.alexandria.api.IntentIntegrator;
+import it.jaschke.alexandria.api.IntentResult;
 import it.jaschke.alexandria.data.AlexandriaContract;
 import it.jaschke.alexandria.services.BookService;
 import it.jaschke.alexandria.services.DownloadImage;
-
 
 public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<Cursor> {
     private static final String TAG = "INTENT_TO_SCAN_ACTIVITY";
@@ -37,8 +37,6 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
 
     private String mScanFormat = "Format:";
     private String mScanContents = "Contents:";
-
-
 
     public AddBook(){
     }
@@ -54,7 +52,11 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-            if (requestCode == SCAN_REQUEST_CODE) {
+        
+        IntentResult scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode,
+                data);
+        if (scanResult != null) {
+            // handle scan result
                 if (resultCode == Activity.RESULT_OK) {
                     // contents contains whatever was encoded
                     String contents = data.getStringExtra("SCAN_RESULT");
@@ -77,7 +79,8 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
                     getActivity().startService(bookIntent);
                     AddBook.this.restartLoader();
                 }
-            }
+        }
+        // else continue with any other code you need in the method
     }
 
     @Override
@@ -134,9 +137,7 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
                 toast.show();
 
                 //This intent will ask the Barcode Scanner app to scan a code and give us the result
-                Intent intent = new Intent("com.google.zxing.client.android.SCAN");
-                startActivityForResult(intent,SCAN_REQUEST_CODE );
-
+                launchXing();
 
             }
         });
@@ -170,12 +171,17 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
         return rootView;
     }
 
+    private void launchXing() {
+        IntentIntegrator integrator = new IntentIntegrator(this);
+        integrator.initiateScan();
+    }
+
     private void restartLoader(){
         getLoaderManager().restartLoader(LOADER_ID, null, this);
     }
 
     @Override
-    public android.support.v4.content.Loader<Cursor> onCreateLoader(int id, Bundle args) {
+    public android.content.Loader<Cursor> onCreateLoader(int id, Bundle args) {
         if(ean.getText().length()==0){
             return null;
         }
@@ -194,7 +200,7 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
     }
 
     @Override
-    public void onLoadFinished(android.support.v4.content.Loader<Cursor> loader, Cursor data) {
+    public void onLoadFinished(android.content.Loader<Cursor> loader, Cursor data) {
         if (!data.moveToFirst()) {
             return;
         }
@@ -223,7 +229,7 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
     }
 
     @Override
-    public void onLoaderReset(android.support.v4.content.Loader<Cursor> loader) {
+    public void onLoaderReset(android.content.Loader<Cursor> loader) {
 
     }
 
@@ -241,5 +247,7 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
     public void onAttach(Activity activity) {
         super.onAttach(activity);
         activity.setTitle(R.string.scan);
+
     }
+
 }
