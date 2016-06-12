@@ -1,13 +1,13 @@
 package it.jaschke.alexandria;
 
 import android.app.Activity;
+import android.app.Fragment;
+import android.app.LoaderManager;
 import android.content.Context;
+import android.content.CursorLoader;
 import android.content.Intent;
 import android.database.Cursor;
 import android.os.Bundle;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.content.CursorLoader;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Patterns;
@@ -19,11 +19,11 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-
+import it.jaschke.alexandria.api.IntentIntegrator;
+import it.jaschke.alexandria.api.IntentResult;
 import it.jaschke.alexandria.data.AlexandriaContract;
 import it.jaschke.alexandria.services.BookService;
 import it.jaschke.alexandria.services.DownloadImage;
-
 
 public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<Cursor> {
     private static final String TAG = "INTENT_TO_SCAN_ACTIVITY";
@@ -33,11 +33,10 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
     private final String EAN_CONTENT="eanContent";
     private static final String SCAN_FORMAT = "scanFormat";
     private static final String SCAN_CONTENTS = "scanContents";
+    private static final int SCAN_REQUEST_CODE = 1001;
 
     private String mScanFormat = "Format:";
     private String mScanContents = "Contents:";
-
-
 
     public AddBook(){
     }
@@ -48,6 +47,40 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
         if(ean!=null) {
             outState.putString(EAN_CONTENT, ean.getText().toString());
         }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        IntentResult scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode,
+                data);
+        if (scanResult != null) {
+            // handle scan result
+                if (resultCode == Activity.RESULT_OK) {
+                    // contents contains whatever was encoded
+                    String contents = data.getStringExtra("SCAN_RESULT");
+                    // Format contains the type of code i.e. UPC, EAN, QRCode etc...
+                    String format = data.getStringExtra("SCAN_RESULT_FORMAT");
+
+                    String ean = contents.toString();
+                    //catch isbn10 numbers
+                    if(ean.length()==10 && !ean.startsWith("978")){
+                        ean="978"+ean;
+                    }
+                    if(ean.length()<13){
+                        clearFields();
+                        return;
+                    }
+                    //Once we have an ISBN, start a book intent
+                    Intent bookIntent = new Intent(getActivity(), BookService.class);
+                    bookIntent.putExtra(BookService.EAN, ean);
+                    bookIntent.setAction(BookService.FETCH_BOOK);
+                    getActivity().startService(bookIntent);
+                    AddBook.this.restartLoader();
+                }
+        }
+        // else continue with any other code you need in the method
     }
 
     @Override
@@ -103,8 +136,14 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
                 Toast toast = Toast.makeText(context, text, duration);
                 toast.show();
 
+                //This intent will ask the Barcode Scanner app to scan a code and give us the result
+                launchXing();
+
             }
         });
+
+
+
 
         rootView.findViewById(R.id.save_button).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -132,12 +171,17 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
         return rootView;
     }
 
+    private void launchXing() {
+        IntentIntegrator integrator = new IntentIntegrator(this);
+        integrator.initiateScan();
+    }
+
     private void restartLoader(){
         getLoaderManager().restartLoader(LOADER_ID, null, this);
     }
 
     @Override
-    public android.support.v4.content.Loader<Cursor> onCreateLoader(int id, Bundle args) {
+    public android.content.Loader<Cursor> onCreateLoader(int id, Bundle args) {
         if(ean.getText().length()==0){
             return null;
         }
@@ -156,7 +200,7 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
     }
 
     @Override
-    public void onLoadFinished(android.support.v4.content.Loader<Cursor> loader, Cursor data) {
+    public void onLoadFinished(android.content.Loader<Cursor> loader, Cursor data) {
         if (!data.moveToFirst()) {
             return;
         }
@@ -185,7 +229,7 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
     }
 
     @Override
-    public void onLoaderReset(android.support.v4.content.Loader<Cursor> loader) {
+    public void onLoaderReset(android.content.Loader<Cursor> loader) {
 
     }
 
@@ -203,5 +247,7 @@ public class AddBook extends Fragment implements LoaderManager.LoaderCallbacks<C
     public void onAttach(Activity activity) {
         super.onAttach(activity);
         activity.setTitle(R.string.scan);
+
     }
+
 }
